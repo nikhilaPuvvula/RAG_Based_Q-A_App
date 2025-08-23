@@ -24,16 +24,17 @@ def process_input(input_type,input_data):
         documents = loader.load()
 
     elif input_type == "PDF":
-        if isinstance(input_data,BytesIO):
-            pdf_reader = PdfReader(input_data)
-        elif hasattr(input_data, "read"):  
-            pdf_reader = PdfReader(BytesIO(input_data.read()))
+        if input_data is not None:
+            pdf_reader = PdfReader(input_data)   # Directly pass the uploaded file
+            text = ""
+            for page in pdf_reader.pages:
+                page_text = page.extract_text()
+                if page_text:  # Avoid None
+                    text += page_text
+            documents = text
         else:
-            raise ValueError("Invalid Input Data for PDF")
-        text = ""
-        for page in pdf_reader.pages:
-            text += page.extract_text()
-        documents = text
+            raise ValueError("No PDF uploaded")
+
 
     elif input_type == "Text":
         if isinstance(input_data, str):
@@ -42,25 +43,21 @@ def process_input(input_type,input_data):
             raise ValueError("Expected a string for 'Text' input type.")
         
     elif input_type == "DOCX":
-        if isinstance(input_data, BytesIO):
-            doc = Document(input_data)
-        elif hasattr(input_data, "read"):  
-            doc = Document(BytesIO(input_data.read()))
+        if input_data is not None:
+            doc = Document(input_data)   # Directly pass the uploaded file
+            text = "\n".join([para.text for para in doc.paragraphs])
+            documents = text
         else:
-            raise ValueError("Invalid input data for DOCX")
-        text = "\n".join([para.text for para in doc.paragraphs])
-        documents = text
+            raise ValueError("No DOCX uploaded")
+
 
     elif input_type == "TXT":
-        if isinstance(input_data, BytesIO):
-            text = input_data.read().decode('utf-8')
-        elif hasattr(input_data, "read"):  
-            text = str(input_data.read().decode('utf-8'))
+        if input_data is not None:
+            text = input_data.read().decode("utf-8")   # Works directly
+            documents = text
         else:
-            raise ValueError("Invalid input data for TXT")
-        documents = text
-    else:
-        raise ValueError("Unsupported input type")
+            raise ValueError("No TXT uploaded")
+
     
     #splitting large size documents into smaller chunks
     text_splitter = CharacterTextSplitter(chunk_size=1000,chunk_overlap=100)
@@ -162,3 +159,4 @@ def main():
 if __name__ == "__main__":
 
     main()
+
