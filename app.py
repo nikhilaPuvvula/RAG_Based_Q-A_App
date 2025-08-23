@@ -13,7 +13,8 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_huggingface import ChatHuggingFace
 from langchain_huggingface import HuggingFaceEndpoint
-from secret_api_keys import huggingface_api_key
+
+huggingface_api_key = os.getenv("HUGGINGFACE_API_KEY")
 
 def process_input(input_type,input_data):
 
@@ -159,4 +160,5 @@ def main():
         
 
 if __name__ == "__main__":
+
     main()
