@@ -9,4 +9,6 @@ nltk
 sentence-transformers
 langchain-huggingface
 faiss-cpu
+
 python-docx
+python-dotenv
