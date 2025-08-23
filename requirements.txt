@@ -1,29 +1,13 @@
-# Core
-streamlit==1.36.0
-numpy==1.26.4
-
-# LangChain stack 
-langchain==0.1.16
-langchain-community==0.0.36
-langchain-huggingface==0.0.7
-
-# Embeddings / HF
-sentence-transformers==2.7.0
-huggingface-hub>=0.23.0
-
-# Vector store
-faiss-cpu==1.8.0.post1
-
-# File parsing
-PyPDF2==3.0.1
-python-docx==1.1.2
-
-# Web loader helpers
-requests>=2.31.0
-beautifulsoup4==4.12.3
-
-# Optional (you had these)
-nltk==3.8.1
-python-dotenv==1.0.1
-
-
+langchain
+numpy
+streamlit
+langchain-community
+streamlit
+PyPDF2
+unstructured
+nltk
+sentence-transformers
+langchain-huggingface
+faiss-cpu
+python-docx
+python-dotenv
