@@ -63,6 +63,8 @@ Run the Streamlit app:
 
 5. Get precise, LLM-powered answers!
 
+----
+
 Example Use Cases
 
 1. Question answering from research papers
@@ -74,5 +76,23 @@ Example Use Cases
 4. Semantic Q&A on personal notes or reports
 
 ----
+
+## UI
+
+<img width="1915" height="862" alt="image" src="https://github.com/user-attachments/assets/3afe50da-5151-4893-a18b-981cbef7e0a9" />
+
+<img width="1906" height="782" alt="image" src="https://github.com/user-attachments/assets/33c3b5fa-1c0b-4978-afee-9944d5defdd9" />
+
+<img width="1915" height="852" alt="image" src="https://github.com/user-attachments/assets/7704d7f1-a45f-4ebc-8f10-9c537953f317" />
+
+---
+
+## Hosted on Streamlit cloud community
+
+Streamlit webapp Link : https://rag-based-question-answer.streamlit.app/
+
+
+
+
 
 
