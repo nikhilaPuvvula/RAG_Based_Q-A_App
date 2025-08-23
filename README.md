@@ -25,6 +25,7 @@ A **Streamlit-based Retrieval-Augmented Generation (RAG) Q&A application** that 
 ## Pipeline of this Project
 
 <img width="998" height="291" alt="image" src="https://github.com/user-attachments/assets/add7d64c-2e6d-4adb-918c-22ad396f1c1f" />
+
 ---
 
 
