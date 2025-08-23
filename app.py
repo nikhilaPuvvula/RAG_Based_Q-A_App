@@ -14,8 +14,6 @@ from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_huggingface import ChatHuggingFace
 from langchain_huggingface import HuggingFaceEndpoint
 
-huggingfacehub_api_token=st.secrets["huggingface_api_key"]
-
 def process_input(input_type,input_data):
 
     loader=None
@@ -157,4 +155,5 @@ def main():
         
 
 if __name__ == "__main__":
+
     main()
