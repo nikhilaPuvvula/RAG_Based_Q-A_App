@@ -1,12 +1,13 @@
-langchain==0.1.17
-langchain-community==0.0.33
-langchain-huggingface==0.0.6
+langchain==0.3.8
+langchain-community==0.3.2
+langchain-huggingface==0.1.2
+langchain-text-splitters==0.2.1
 
 faiss-cpu
 numpy
 streamlit
 PyPDF2
+python-docx
+sentence-transformers
 unstructured
 nltk
-sentence-transformers
-python-docx
