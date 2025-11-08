@@ -6,6 +6,7 @@ from PyPDF2 import PdfReader
 
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_text_splitters import CharacterTextSplitter
+
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.in_memory import InMemoryDocstore
@@ -16,9 +17,9 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 
 
-# -----------------------------
+# ----------------------------------------------------------
 # DOCUMENT PROCESSING
-# -----------------------------
+# ----------------------------------------------------------
 def process_input(input_type, input_data):
 
     if input_type == "Link":
@@ -65,12 +66,10 @@ def process_input(input_type, input_data):
     return vectorstore
 
 
-# -----------------------------
-# RAG ANSWERING
-# -----------------------------
+# ----------------------------------------------------------
+# RAG ANSWERING (MODIFIED TO RETURN ONLY CONTENT)
+# ----------------------------------------------------------
 def answer_question(vectorstore, query):
-
-    retriever = vectorstore.as_retriever()
 
     llm = HuggingFaceEndpoint(
         repo_id="meta-llama/Meta-Llama-3-8B-Instruct",
@@ -79,6 +78,7 @@ def answer_question(vectorstore, query):
     )
 
     chat_model = ChatHuggingFace(llm=llm)
+    retriever = vectorstore.as_retriever()
 
     prompt = PromptTemplate.from_template("""
 Use the following context to answer the question.
@@ -100,15 +100,18 @@ Answer:
         | chat_model
     )
 
-    return rag_chain.invoke(query)
+    response = rag_chain.invoke(query)
+
+    # ✅ Return ONLY the LLM-generated text (clean output)
+    return response.content
 
 
-# -----------------------------
+# ----------------------------------------------------------
 # STREAMLIT UI
-# -----------------------------
+# ----------------------------------------------------------
 def main():
 
-    st.title("RAG Based Q&A App (LangChain 0.4.x)")
+    st.title("RAG Based Q&A App")
 
     input_type = st.selectbox("Input Type", ["Link", "PDF", "Text", "DOCX", "TXT"])
 
@@ -125,12 +128,13 @@ def main():
 
     if st.button("Process Document"):
         st.session_state["vs"] = process_input(input_type, input_data)
-        st.success("✅ Document processed!")
+        st.success("✅ Document processed successfully!")
 
     if "vs" in st.session_state:
         query = st.text_input("Ask your question:")
         if st.button("Submit"):
             answer = answer_question(st.session_state["vs"], query)
+            st.write("### ✅ Answer:")
             st.write(answer)
 
 
