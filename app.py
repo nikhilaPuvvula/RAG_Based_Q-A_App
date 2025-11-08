@@ -14,104 +14,101 @@ from langchain_community.docstore.in_memory import InMemoryDocstore
 
 from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 
-# ✅ New RAG chain system (replaces old RetrievalQA)
+# ✅ New RAG chain system
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains import create_retrieval_chain
 
 
-# ----------------------------------------------------------
-# PROCESS INPUT DOCUMENTS
-# ----------------------------------------------------------
+# ------------------------------------------
+# DOCUMENT PROCESSING
+# ------------------------------------------
 def process_input(input_type, input_data):
 
+    # Load documents
     if input_type == "Link":
         loader = WebBaseLoader(input_data)
-        documents = loader.load()
-        text_list = [doc.page_content for doc in documents]
+        docs = loader.load()
+        raw_text = [doc.page_content for doc in docs]
 
     elif input_type == "PDF":
-        pdf_reader = PdfReader(input_data)
+        pdf = PdfReader(input_data)
         text = ""
-        for page in pdf_reader.pages:
+        for page in pdf.pages:
             content = page.extract_text()
             if content:
                 text += content
-        text_list = [text]
+        raw_text = [text]
 
     elif input_type == "Text":
-        text_list = [input_data]
+        raw_text = [input_data]
 
     elif input_type == "DOCX":
         doc = Document(input_data)
         text = "\n".join(p.text for p in doc.paragraphs)
-        text_list = [text]
+        raw_text = [text]
 
     elif input_type == "TXT":
-        text = input_data.read().decode("utf-8")
-        text_list = [text]
+        raw_text = [input_data.read().decode("utf-8")]
 
-    # ✅ Split text using new splitter package
+    # Split text
     splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     chunks = []
-    for txt in text_list:
+    for txt in raw_text:
         chunks.extend(splitter.split_text(txt))
 
-    # ✅ Embeddings model
+    # Embeddings
     embedder = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-mpnet-base-v2",
         model_kwargs={"device": "cpu"},
         encode_kwargs={"normalize_embeddings": False}
     )
 
-    # ✅ Create FAISS index
+    # Build FAISS index
     vec = embedder.embed_query("hello")
     dim = len(vec)
     index = faiss.IndexFlatL2(dim)
 
-    vector_db = FAISS(
+    vectorstore = FAISS(
         embedding_function=embedder.embed_query,
         index=index,
         docstore=InMemoryDocstore(),
         index_to_docstore_id={}
     )
 
-    vector_db.add_texts(chunks)
-    return vector_db
+    vectorstore.add_texts(chunks)
+    return vectorstore
 
 
-# ----------------------------------------------------------
-# ANSWER QUESTION USING LATEST LANGCHAIN RAG PIPELINE
-# ----------------------------------------------------------
+# ------------------------------------------
+# QUESTION ANSWERING
+# ------------------------------------------
 def answer_question(vectorstore, query):
 
     llm = HuggingFaceEndpoint(
         repo_id="meta-llama/Meta-Llama-3-8B-Instruct",
         task="conversational",
-        huggingfacehub_api_token=st.secrets["huggingface_api_key"],
-        temperature=0.6
+        temperature=0.6,
+        huggingfacehub_api_token=st.secrets["huggingface_api_key"]
     )
 
-    chat_llm = ChatHuggingFace(llm=llm)
+    chat_model = ChatHuggingFace(llm=llm)
 
     retriever = vectorstore.as_retriever()
 
-    # ✅ New LangChain RAG chain
-    doc_chain = create_stuff_documents_chain(chat_llm)
+    # ✅ New LangChain RAG pipeline
+    doc_chain = create_stuff_documents_chain(chat_model)
     rag_chain = create_retrieval_chain(retriever, doc_chain)
 
-    res = rag_chain.invoke({"input": query})
-    return res["output_text"]
+    result = rag_chain.invoke({"input": query})
+    return result["output_text"]
 
 
-# ----------------------------------------------------------
-# STREAMLIT APP UI
-# ----------------------------------------------------------
+# ------------------------------------------
+# STREAMLIT UI
+# ------------------------------------------
 def main():
 
-    st.markdown(
-        "<h1 style='text-align:center; color:white;'>RAG Based Q&A APP</h1>",
-        unsafe_allow_html=True
-    )
+    st.title("🔍 RAG Based Q&A App")
 
     input_type = st.selectbox("Input Type", ["Link", "PDF", "Text", "DOCX", "TXT"])
 
@@ -130,15 +127,17 @@ def main():
     elif input_type == "TXT":
         input_data = st.file_uploader("Upload TXT", type=["txt"])
 
-    if st.button("Process"):
-        vectorstore = process_input(input_type, input_data)
-        st.session_state["vs"] = vectorstore
+    if st.button("Process Document"):
+        vs = process_input(input_type, input_data)
+        st.session_state["vs"] = vs
+        st.success("✅ Document processed successfully!")
 
     if "vs" in st.session_state:
-        query = st.text_input("Ask your question")
-        if st.button("Submit"):
-            ans = answer_question(st.session_state["vs"], query)
-            st.write(ans)
+        query = st.text_input("Ask your question:")
+        if st.button("Submit Question"):
+            answer = answer_question(st.session_state["vs"], query)
+            st.write("### ✅ Answer:")
+            st.write(answer)
 
 
 if __name__ == "__main__":
