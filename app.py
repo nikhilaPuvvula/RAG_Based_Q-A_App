@@ -1,34 +1,34 @@
 import streamlit as st
 import numpy as np
 import faiss
-from io import BytesIO
 from docx import Document
 from PyPDF2 import PdfReader
 
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_text_splitters import CharacterTextSplitter
-
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.in_memory import InMemoryDocstore
 
 from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 
-# ✅ Correct imports for LangChain 0.2.x
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.chains.retrieval import create_retrieval_chain
+from langchain_core.prompts import PromptTemplate
+from langchain_core.runnables import RunnablePassthrough
 
 
+# -----------------------------
+# DOCUMENT PROCESSING
+# -----------------------------
 def process_input(input_type, input_data):
 
     if input_type == "Link":
-        loader = WebBaseLoader(input_data)
-        docs = loader.load()
-        raw_text = [doc.page_content for doc in docs]
+        docs = WebBaseLoader(input_data).load()
+        raw_text = [d.page_content for d in docs]
 
     elif input_type == "PDF":
         pdf = PdfReader(input_data)
-        raw_text = ["".join(page.extract_text() or "" for page in pdf.pages)]
+        text = "".join(page.extract_text() or "" for page in pdf.pages)
+        raw_text = [text]
 
     elif input_type == "Text":
         raw_text = [input_data]
@@ -48,7 +48,6 @@ def process_input(input_type, input_data):
     embedder = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-mpnet-base-v2",
         model_kwargs={"device": "cpu"},
-        encode_kwargs={"normalize_embeddings": False}
     )
 
     vec = embedder.embed_query("hello")
@@ -66,58 +65,73 @@ def process_input(input_type, input_data):
     return vectorstore
 
 
+# -----------------------------
+# RAG ANSWERING
+# -----------------------------
 def answer_question(vectorstore, query):
+
+    retriever = vectorstore.as_retriever()
 
     llm = HuggingFaceEndpoint(
         repo_id="meta-llama/Meta-Llama-3-8B-Instruct",
         task="conversational",
-        temperature=0.6,
-        huggingfacehub_api_token=st.secrets["huggingface_api_key"]
+        huggingfacehub_api_token=st.secrets["huggingface_api_key"],
     )
 
     chat_model = ChatHuggingFace(llm=llm)
 
-    retriever = vectorstore.as_retriever()
+    prompt = PromptTemplate.from_template("""
+Use the following context to answer the question.
 
-    doc_chain = create_stuff_documents_chain(chat_model)
-    rag_chain = create_retrieval_chain(retriever, doc_chain)
+Context:
+{context}
 
-    result = rag_chain.invoke({"input": query})
-    return result["output_text"]
+Question: {question}
+
+Answer:
+""")
+
+    rag_chain = (
+        {
+            "context": retriever,
+            "question": RunnablePassthrough()
+        }
+        | prompt
+        | chat_model
+    )
+
+    return rag_chain.invoke(query)
 
 
+# -----------------------------
+# STREAMLIT UI
+# -----------------------------
 def main():
 
-    st.title("📘 RAG Based Q&A App")
+    st.title("RAG Based Q&A App (LangChain 0.4.x)")
 
     input_type = st.selectbox("Input Type", ["Link", "PDF", "Text", "DOCX", "TXT"])
 
     if input_type == "Link":
         input_data = st.text_input("Enter URL")
-
     elif input_type == "Text":
         input_data = st.text_area("Enter text")
-
     elif input_type == "PDF":
         input_data = st.file_uploader("Upload PDF", type=["pdf"])
-
     elif input_type == "DOCX":
         input_data = st.file_uploader("Upload DOCX", type=["docx", "doc"])
-
     elif input_type == "TXT":
         input_data = st.file_uploader("Upload TXT", type=["txt"])
 
     if st.button("Process Document"):
-        vs = process_input(input_type, input_data)
-        st.session_state["vs"] = vs
-        st.success("✅ Processed successfully!")
+        st.session_state["vs"] = process_input(input_type, input_data)
+        st.success("✅ Document processed!")
 
     if "vs" in st.session_state:
         query = st.text_input("Ask your question:")
         if st.button("Submit"):
-            ans = answer_question(st.session_state["vs"], query)
-            st.write("### ✅ Answer:")
-            st.write(ans)
+            answer = answer_question(st.session_state["vs"], query)
+            st.write(answer)
 
 
 if __name__ == "__main__":
