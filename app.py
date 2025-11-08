@@ -1,97 +1,87 @@
 import streamlit as st
+import numpy as np
 import faiss
-import os
 from io import BytesIO
 from docx import Document
-import numpy as np
-
-from langchain_community.document_loaders import WebBaseLoader
 from PyPDF2 import PdfReader
 
-# ✅ Old LangChain versions support this
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.chains import RetrievalQA
+from langchain_community.document_loaders import WebBaseLoader
+from langchain_text_splitters import CharacterTextSplitter
 
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.in_memory import InMemoryDocstore
 
-from langchain_huggingface import ChatHuggingFace
-from langchain_huggingface import HuggingFaceEndpoint
+from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
+
+# ✅ New RAG chain system (replaces old RetrievalQA)
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain.chains import create_retrieval_chain
 
 
-# ------------------------------------------
-# Process input data
-# ------------------------------------------
+# ----------------------------------------------------------
+# PROCESS INPUT DOCUMENTS
+# ----------------------------------------------------------
 def process_input(input_type, input_data):
 
     if input_type == "Link":
         loader = WebBaseLoader(input_data)
         documents = loader.load()
+        text_list = [doc.page_content for doc in documents]
 
     elif input_type == "PDF":
-        if input_data is not None:
-            pdf_reader = PdfReader(input_data)
-            text = ""
-            for page in pdf_reader.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text
-            documents = text
-        else:
-            raise ValueError("No PDF uploaded")
+        pdf_reader = PdfReader(input_data)
+        text = ""
+        for page in pdf_reader.pages:
+            content = page.extract_text()
+            if content:
+                text += content
+        text_list = [text]
 
     elif input_type == "Text":
-        documents = input_data
+        text_list = [input_data]
 
     elif input_type == "DOCX":
         doc = Document(input_data)
-        documents = "\n".join([p.text for p in doc.paragraphs])
+        text = "\n".join(p.text for p in doc.paragraphs)
+        text_list = [text]
 
     elif input_type == "TXT":
-        documents = input_data.read().decode("utf-8")
+        text = input_data.read().decode("utf-8")
+        text_list = [text]
 
-    # ✅ Split text correctly
-    text_splitter = CharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=100
-    )
+    # ✅ Split text using new splitter package
+    splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+    chunks = []
+    for txt in text_list:
+        chunks.extend(splitter.split_text(txt))
 
-    if input_type == "Link":
-        docs = text_splitter.split_documents(documents)
-        texts = [str(doc.page_content) for doc in docs]
-    else:
-        texts = text_splitter.split_text(documents)
-
-    # ✅ Embeddings
-    model_name = "sentence-transformers/all-mpnet-base-v2"
-
-    hf_embeddings = HuggingFaceEmbeddings(
-        model_name=model_name,
-        model_kwargs={'device': 'cpu'},
-        encode_kwargs={'normalize_embeddings': False}
+    # ✅ Embeddings model
+    embedder = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-mpnet-base-v2",
+        model_kwargs={"device": "cpu"},
+        encode_kwargs={"normalize_embeddings": False}
     )
 
     # ✅ Create FAISS index
-    sample_vector = np.array(hf_embeddings.embed_query("hello"))
-    dimension = sample_vector.shape[0]
+    vec = embedder.embed_query("hello")
+    dim = len(vec)
+    index = faiss.IndexFlatL2(dim)
 
-    index = faiss.IndexFlatL2(dimension)
-
-    vector_store = FAISS(
-        embedding_function=hf_embeddings.embed_query,
+    vector_db = FAISS(
+        embedding_function=embedder.embed_query,
         index=index,
         docstore=InMemoryDocstore(),
-        index_to_docstore_id={},
+        index_to_docstore_id={}
     )
 
-    vector_store.add_texts(texts)
-    return vector_store
+    vector_db.add_texts(chunks)
+    return vector_db
 
 
-# ------------------------------------------
-# Answer question using RetrievalQA
-# ------------------------------------------
+# ----------------------------------------------------------
+# ANSWER QUESTION USING LATEST LANGCHAIN RAG PIPELINE
+# ----------------------------------------------------------
 def answer_question(vectorstore, query):
 
     llm = HuggingFaceEndpoint(
@@ -103,20 +93,19 @@ def answer_question(vectorstore, query):
 
     chat_llm = ChatHuggingFace(llm=llm)
 
-    # ✅ Works ONLY in LangChain <= 0.1.17
-    qa = RetrievalQA.from_chain_type(
-        llm=chat_llm,
-        chain_type="stuff",
-        retriever=vectorstore.as_retriever()
-    )
+    retriever = vectorstore.as_retriever()
 
-    answer = qa({"query": query})
-    return answer
+    # ✅ New LangChain RAG chain
+    doc_chain = create_stuff_documents_chain(chat_llm)
+    rag_chain = create_retrieval_chain(retriever, doc_chain)
+
+    res = rag_chain.invoke({"input": query})
+    return res["output_text"]
 
 
-# ------------------------------------------
-# Streamlit UI
-# ------------------------------------------
+# ----------------------------------------------------------
+# STREAMLIT APP UI
+# ----------------------------------------------------------
 def main():
 
     st.markdown(
@@ -127,33 +116,29 @@ def main():
     input_type = st.selectbox("Input Type", ["Link", "PDF", "Text", "DOCX", "TXT"])
 
     if input_type == "Link":
-        count = st.number_input("Number of Links", min_value=1, max_value=20, step=1)
-        input_data = []
-        for i in range(count):
-            url = st.text_input(f"URL {i+1}")
-            input_data.append(url)
+        input_data = st.text_input("Enter URL")
 
     elif input_type == "Text":
-        input_data = st.text_input("Enter text")
+        input_data = st.text_area("Enter text")
 
     elif input_type == "PDF":
         input_data = st.file_uploader("Upload PDF", type=["pdf"])
 
-    elif input_type == "TXT":
-        input_data = st.file_uploader("Upload TXT", type=["txt"])
-
     elif input_type == "DOCX":
         input_data = st.file_uploader("Upload DOCX", type=["docx", "doc"])
 
-    if st.button("Proceed"):
-        vectorstore = process_input(input_type, input_data)
-        st.session_state["vectorstore"] = vectorstore
+    elif input_type == "TXT":
+        input_data = st.file_uploader("Upload TXT", type=["txt"])
 
-    if "vectorstore" in st.session_state:
-        query = st.text_input("Ask your question:")
+    if st.button("Process"):
+        vectorstore = process_input(input_type, input_data)
+        st.session_state["vs"] = vectorstore
+
+    if "vs" in st.session_state:
+        query = st.text_input("Ask your question")
         if st.button("Submit"):
-            answer = answer_question(st.session_state["vectorstore"], query)
-            st.write(answer["result"])
+            ans = answer_question(st.session_state["vs"], query)
+            st.write(ans)
 
 
 if __name__ == "__main__":
