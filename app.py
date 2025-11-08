@@ -6,7 +6,7 @@ from docx import Document
 import numpy as np
 from langchain_community.document_loaders import WebBaseLoader
 from PyPDF2 import PdfReader
-from langchain.chains.retrieval import RetrievalQA
+from langchain.chains import RetrievalQA
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
@@ -157,4 +157,5 @@ def main():
 if __name__ == "__main__":
 
     main()
+
 
